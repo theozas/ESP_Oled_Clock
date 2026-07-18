@@ -40,8 +40,9 @@ See [docs/WIRING.md](docs/WIRING.md) for the exact wiring and display channel ma
 Setup mode starts when:
 
 - no saved Wi-Fi credentials exist,
-- the ESP32-C6 cannot connect to the saved Wi-Fi network during boot,
-- or initial NTP sync fails.
+- or the ESP32-C6 cannot connect to the saved Wi-Fi network during boot.
+
+If Wi-Fi connects but NTP time sync fails, the clock does not return to setup mode. It keeps the saved credentials, shows `NO NET`, leaves SNTP running, and waits for time sync to recover.
 
 In setup mode:
 
@@ -101,4 +102,3 @@ The firmware prints I2C scan results, Wi-Fi status, setup hotspot details, and c
 - `src/main.c` - firmware, Wi-Fi setup portal, NTP sync, OLED rendering, and clock loop.
 - `platformio.ini` - PlatformIO board/framework configuration.
 - `docs/WIRING.md` - hardware wiring and display mapping.
-

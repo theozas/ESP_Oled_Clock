@@ -98,6 +98,7 @@ static EventGroupHandle_t wifi_event_group;
 */
 static bool wifi_connected = false;
 static int wifi_retry_count = 0;
+static bool sntp_started = false;
 
 typedef struct {
     char ssid[33];
@@ -1452,10 +1453,13 @@ static bool time_sync_init(void)
 
     tzset();
 
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    esp_sntp_setservername(1, "time.google.com");
-    esp_sntp_init();
+    if (!sntp_started) {
+        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_setservername(1, "time.google.com");
+        esp_sntp_init();
+        sntp_started = true;
+    }
 
     time_t now = 0;
     struct tm timeinfo = {0};
@@ -1480,7 +1484,7 @@ static bool time_sync_init(void)
         return true;
     }
 
-    ESP_LOGE(TAG, "NTP failed");
+    ESP_LOGE(TAG, "NTP failed; keeping WiFi credentials and retrying in background");
     return false;
 }
 
@@ -1551,8 +1555,8 @@ void app_main(void)
     bool time_ok = time_sync_init();
 
     if (!time_ok) {
-        ESP_LOGW(TAG, "NTP failed; entering setup mode");
-        start_setup_portal();
+        ESP_LOGW(TAG, "NTP failed; staying online and waiting for time");
+        show_status_all("NO NET");
     }
 
     /*
@@ -1560,6 +1564,7 @@ void app_main(void)
        Colon still updates every second.
     */
     int last_minute = -1;
+    int last_no_net_second = -1;
 
     while (1) {
         time_t now;
@@ -1571,13 +1576,29 @@ void app_main(void)
         time(&now);
         localtime_r(&now, &t);
 
+        bool time_valid = t.tm_year >= (2024 - 1900);
+
         ESP_LOGI(
             TAG,
-            "TIME %02d:%02d:%02d",
+            "TIME %02d:%02d:%02d wifi=%s valid=%s",
             t.tm_hour,
             t.tm_min,
-            t.tm_sec
+            t.tm_sec,
+            wifi_connected ? "yes" : "no",
+            time_valid ? "yes" : "no"
         );
+
+        if (!time_valid) {
+            if (t.tm_sec != last_no_net_second &&
+                (last_no_net_second < 0 || t.tm_sec % 10 == 0)) {
+                last_no_net_second = t.tm_sec;
+                show_status_all("NO NET");
+            }
+
+            draw_colon(&displays[2], true, true);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
 
         /*
            Update digit screens only when minute changes.
