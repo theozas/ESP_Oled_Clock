@@ -1119,6 +1119,49 @@ static bool form_get_value(
     return false;
 }
 
+/*
+   Human-readable names for common Wi-Fi disconnect reasons.
+*/
+static const char *wifi_reason_name(uint8_t reason)
+{
+    switch (reason) {
+        case WIFI_REASON_UNSPECIFIED:
+            return "UNSPECIFIED";
+        case WIFI_REASON_AUTH_EXPIRE:
+            return "AUTH_EXPIRE";
+        case WIFI_REASON_AUTH_LEAVE:
+            return "AUTH_LEAVE";
+        case WIFI_REASON_ASSOC_EXPIRE:
+            return "ASSOC_EXPIRE";
+        case WIFI_REASON_ASSOC_TOOMANY:
+            return "ASSOC_TOOMANY";
+        case WIFI_REASON_NOT_AUTHED:
+            return "NOT_AUTHED";
+        case WIFI_REASON_NOT_ASSOCED:
+            return "NOT_ASSOCED";
+        case WIFI_REASON_ASSOC_LEAVE:
+            return "ASSOC_LEAVE";
+        case WIFI_REASON_ASSOC_NOT_AUTHED:
+            return "ASSOC_NOT_AUTHED";
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+            return "4WAY_HANDSHAKE_TIMEOUT";
+        case WIFI_REASON_HANDSHAKE_TIMEOUT:
+            return "HANDSHAKE_TIMEOUT";
+        case WIFI_REASON_AUTH_FAIL:
+            return "AUTH_FAIL";
+        case WIFI_REASON_NO_AP_FOUND:
+            return "NO_AP_FOUND";
+        case WIFI_REASON_ASSOC_FAIL:
+            return "ASSOC_FAIL";
+        case WIFI_REASON_CONNECTION_FAIL:
+            return "CONNECTION_FAIL";
+        case WIFI_REASON_BEACON_TIMEOUT:
+            return "BEACON_TIMEOUT";
+        default:
+            return "OTHER";
+    }
+}
+
 static esp_err_t setup_page_get_handler(httpd_req_t *req)
 {
     static const char page[] =
@@ -1129,12 +1172,18 @@ static esp_err_t setup_page_get_handler(httpd_req_t *req)
         "body{font-family:system-ui,Arial;margin:2rem;max-width:28rem}"
         "label,input,button{display:block;width:100%;font-size:1rem}"
         "input{box-sizing:border-box;margin:.35rem 0 1rem;padding:.7rem}"
+        ".check{display:flex;gap:.5rem;align-items:center;margin:-.4rem 0 1rem}"
+        ".check input{width:auto;margin:0}"
+        ".check span{font-size:1rem}"
         "button{padding:.8rem;background:#111;color:white;border:0}"
         "</style></head><body>"
         "<h1>Clock Wi-Fi Setup</h1>"
         "<form method='post' action='/save'>"
         "<label>Wi-Fi name</label><input name='ssid' maxlength='32' required>"
-        "<label>Password</label><input name='pass' maxlength='64' type='password'>"
+        "<label>Password</label><input id='pass' name='pass' maxlength='64' type='password'>"
+        "<label class='check'><input type='checkbox' onclick=\""
+        "document.getElementById('pass').type=this.checked?'text':'password'\">"
+        "<span>Show password</span></label>"
         "<button type='submit'>Save and restart</button>"
         "</form></body></html>";
 
@@ -1322,8 +1371,19 @@ static void wifi_event_handler(
     } else if (event_base == WIFI_EVENT &&
                event_id == WIFI_EVENT_STA_DISCONNECTED) {
 
+        wifi_event_sta_disconnected_t *event =
+            (wifi_event_sta_disconnected_t *) event_data;
+
         wifi_connected = false;
         wifi_retry_count++;
+
+        ESP_LOGW(
+            TAG,
+            "WiFi disconnected reason=%d (%s), retry=%d",
+            event->reason,
+            wifi_reason_name(event->reason),
+            wifi_retry_count
+        );
 
         ESP_LOGW(TAG, "WiFi reconnect");
         esp_wifi_connect();
